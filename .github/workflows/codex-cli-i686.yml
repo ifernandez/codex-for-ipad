@@ -95,12 +95,30 @@ jobs:
           cargo metadata --no-deps --format-version 1 > "$GITHUB_WORKSPACE/cargo-metadata.json"
           jq -r '.packages[] | select(.targets[]?.name == "codex") | .name' "$GITHUB_WORKSPACE/cargo-metadata.json"
 
+      - name: Prepare i686 BLAKE3 workaround
+        working-directory: upstream/codex/codex-rs
+        shell: bash
+        run: |
+          set -euo pipefail
+          # BLAKE3 1.8.2 tries to compile its 32-bit AVX-512 C implementation.
+          # Zig/Clang rejects that implementation for i686 with an evex512 error.
+          # Use the crate's supported "pure" fallback instead. This is a local
+          # CI-only patch and does not change the pinned upstream Codex source.
+          cargo fetch --locked --target "$CODEX_TARGET"
+          blake3_src="$(find "$CARGO_HOME/registry/src" -maxdepth 3 -type d -name 'blake3-1.8.2' -print -quit)"
+          test -n "$blake3_src"
+          rm -rf "$GITHUB_WORKSPACE/blake3-patched"
+          cp -a "$blake3_src" "$GITHUB_WORKSPACE/blake3-patched"
+          sed -i 's/^default = \["std"\]$/default = ["std", "pure"]/' "$GITHUB_WORKSPACE/blake3-patched/Cargo.toml"
+          grep -F 'default = ["std", "pure"]' "$GITHUB_WORKSPACE/blake3-patched/Cargo.toml"
+
       - name: Cross-compile Codex CLI
         working-directory: upstream/codex/codex-rs
         shell: bash
         run: |
           set -euo pipefail
-          cargo zigbuild --release --target "$CODEX_TARGET" --bin codex
+          cargo zigbuild --release --target "$CODEX_TARGET" --bin codex \
+            --config "patch.crates-io.blake3.path='$GITHUB_WORKSPACE/blake3-patched'"
 
       - name: Inspect and package CLI
         shell: bash
