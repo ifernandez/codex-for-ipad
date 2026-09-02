@@ -1,0 +1,104 @@
+name: Codex CLI i686 musl
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/artifacts/cargo-target
+      CARGO_HOME: ${{ github.workspace }}/.codex-local/cargo
+      RUSTUP_HOME: ${{ github.workspace }}/.codex-local/rustup
+
+    steps:
+      - name: Check out CodexPad
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Resolve pinned upstreams
+        shell: bash
+        run: |
+          set -euo pipefail
+          revision="$(jq -r '.codex.revision' Dependencies/upstreams.json)"
+          toolchain="$(jq -r '.codex.rustToolchain' Dependencies/upstreams.json)"
+          target="$(jq -r '.codex.target' Dependencies/upstreams.json)"
+          zig="$(jq -r '.tooling.zig' Dependencies/upstreams.json)"
+          [[ "$revision" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$toolchain" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$target" == "i686-unknown-linux-musl" ]]
+          echo "CODEX_REVISION=$revision" >> "$GITHUB_ENV"
+          echo "RUST_TOOLCHAIN=$toolchain" >> "$GITHUB_ENV"
+          echo "CODEX_TARGET=$target" >> "$GITHUB_ENV"
+          echo "ZIG_VERSION=$zig" >> "$GITHUB_ENV"
+
+      - name: Fetch pinned Codex source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p upstream/codex
+          git -C upstream/codex init
+          git -C upstream/codex remote add origin https://github.com/openai/codex.git
+          git -C upstream/codex fetch --depth=1 origin "$CODEX_REVISION"
+          git -C upstream/codex checkout --detach FETCH_HEAD
+          test "$(git -C upstream/codex rev-parse HEAD)" = "$CODEX_REVISION"
+
+      - name: Install pinned Rust toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+            | sh -s -- -y --profile minimal --default-toolchain "$RUST_TOOLCHAIN" \
+                --target "$CODEX_TARGET"
+          echo "$CARGO_HOME/bin" >> "$GITHUB_PATH"
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+        with:
+          version: ${{ env.ZIG_VERSION }}
+
+      - name: Install cargo-zigbuild
+        shell: bash
+        run: cargo install cargo-zigbuild --locked
+
+      - name: Inspect Codex workspace
+        working-directory: upstream/codex/codex-rs
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo metadata --no-deps --format-version 1 > "$GITHUB_WORKSPACE/cargo-metadata.json"
+          jq -r '.packages[] | select(.targets[]?.name == "codex") | .name' "$GITHUB_WORKSPACE/cargo-metadata.json"
+
+      - name: Cross-compile Codex CLI
+        working-directory: upstream/codex/codex-rs
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo zigbuild --release --target "$CODEX_TARGET" --bin codex
+
+      - name: Inspect and package CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          binary="$CARGO_TARGET_DIR/$CODEX_TARGET/release/codex"
+          test -x "$binary"
+          file "$binary" | tee artifacts/codex.file.txt
+          sha256sum "$binary" | tee artifacts/codex.sha256
+          mkdir -p artifacts/codex-i686-musl
+          install -m 0755 "$binary" artifacts/codex-i686-musl/codex
+          cp artifacts/codex.file.txt artifacts/codex.sha256 artifacts/codex-i686-musl/
+          tar -C artifacts -czf artifacts/codex-i686-musl.tar.gz codex-i686-musl
+
+      - name: Upload Codex CLI
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: codex-i686-musl
+          path: artifacts/codex-i686-musl.tar.gz
+          if-no-files-found: error
+          compression-level: 9
+          retention-days: 14
