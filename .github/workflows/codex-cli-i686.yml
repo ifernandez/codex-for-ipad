@@ -15,6 +15,7 @@ jobs:
       CARGO_HOME: ${{ github.workspace }}/.codex-local/cargo
       RUSTUP_HOME: ${{ github.workspace }}/.codex-local/rustup
       V8_FROM_SOURCE: "1"
+      GN_ARGS: "use_glib=false"
 
     steps:
       - name: Check out CodexPad
