@@ -102,10 +102,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # BLAKE3 1.8.2 tries to compile its 32-bit AVX-512 C implementation.
-          # Zig/Clang rejects that implementation for i686 with an evex512 error.
-          # Use the crate's supported "pure" fallback instead. This is a local
-          # CI-only patch and does not change the pinned upstream Codex source.
           cargo fetch --locked --target "$CODEX_TARGET"
           blake3_src="$(find "$CARGO_HOME/registry/src" -maxdepth 3 -type d -name 'blake3-1.8.2' -print -quit)"
           test -n "$blake3_src"
@@ -123,9 +119,15 @@ jobs:
           test -n "$v8_src"
           icu_dat="$v8_src/third_party/icu/common/icudtl.dat"
           if [[ ! -f "$icu_dat" ]]; then
-            echo "icudtl.dat is missing; using the matching deno_core_icudata package"
-            cargo fetch --locked --target "$CODEX_TARGET"
-            icu_source="$(find "$CARGO_HOME/registry/src" -maxdepth 3 -type f -path '*/deno_core_icudata-*/src/icudtl.dat' -print -quit)"
+            echo "icudtl.dat is missing; downloading deno_core_icudata 0.77.0"
+            tmpdir="$(mktemp -d)"
+            trap 'rm -rf "$tmpdir"' EXIT
+            curl --fail --location --retry 5 \
+              -o "$tmpdir/deno_core_icudata.crate" \
+              'https://crates.io/api/v1/crates/deno_core_icudata/0.77.0/download'
+            mkdir -p "$tmpdir/pkg"
+            tar -xzf "$tmpdir/deno_core_icudata.crate" -C "$tmpdir/pkg"
+            icu_source="$(find "$tmpdir/pkg" -type f -path '*/src/icudtl.dat' -print -quit)"
             test -n "$icu_source"
             mkdir -p "$(dirname "$icu_dat")"
             cp "$icu_source" "$icu_dat"
