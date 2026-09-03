@@ -114,6 +114,29 @@ jobs:
           sed -i 's/^default = \["std"\]$/default = ["std", "pure"]/' "$GITHUB_WORKSPACE/blake3-patched/Cargo.toml"
           grep -F 'default = ["std", "pure"]' "$GITHUB_WORKSPACE/blake3-patched/Cargo.toml"
 
+      - name: Prepare V8 ICU data
+        working-directory: upstream/codex/codex-rs
+        shell: bash
+        run: |
+          set -euo pipefail
+          v8_src="$(find "$CARGO_HOME/registry/src" -maxdepth 3 -type d -name 'v8-149.2.0' -print -quit)"
+          test -n "$v8_src"
+          icu_dat="$v8_src/third_party/icu/common/icudtl.dat"
+          if [[ ! -f "$icu_dat" ]]; then
+            echo "icudtl.dat is missing; generating it from the bundled ICU sources"
+            icu_source="$v8_src/third_party/icu/source"
+            test -d "$icu_source"
+            pushd "$icu_source" >/dev/null
+            ./runConfigureICU Linux --disable-tests --disable-layout
+            make -j"$(nproc)"
+            popd >/dev/null
+            generated="$(find "$icu_source" -type f -name 'icudt*l.dat' -print -quit)"
+            test -n "$generated"
+            cp "$generated" "$icu_dat"
+          fi
+          test -s "$icu_dat"
+          ls -lh "$icu_dat"
+
       - name: Cross-compile Codex CLI
         working-directory: upstream/codex/codex-rs
         shell: bash
@@ -136,7 +159,7 @@ jobs:
           tar -C artifacts -czf artifacts/codex-i686-musl.tar.gz codex-i686-musl
 
       - name: Upload Codex CLI
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a0 # v7.0.1
         with:
           name: codex-i686-musl
           path: artifacts/codex-i686-musl.tar.gz
