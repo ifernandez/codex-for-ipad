@@ -123,16 +123,12 @@ jobs:
           test -n "$v8_src"
           icu_dat="$v8_src/third_party/icu/common/icudtl.dat"
           if [[ ! -f "$icu_dat" ]]; then
-            echo "icudtl.dat is missing; generating it from the bundled ICU sources"
-            icu_source="$v8_src/third_party/icu/source"
-            test -d "$icu_source"
-            pushd "$icu_source" >/dev/null
-            ./runConfigureICU Linux --disable-tests --disable-layout
-            make -j"$(nproc)"
-            popd >/dev/null
-            generated="$(find "$icu_source" -type f -name 'icudt*l.dat' -print -quit)"
-            test -n "$generated"
-            cp "$generated" "$icu_dat"
+            echo "icudtl.dat is missing; using the matching deno_core_icudata package"
+            cargo fetch --locked --target "$CODEX_TARGET"
+            icu_source="$(find "$CARGO_HOME/registry/src" -maxdepth 3 -type f -path '*/deno_core_icudata-*/src/icudtl.dat' -print -quit)"
+            test -n "$icu_source"
+            mkdir -p "$(dirname "$icu_dat")"
+            cp "$icu_source" "$icu_dat"
           fi
           test -s "$icu_dat"
           ls -lh "$icu_dat"
