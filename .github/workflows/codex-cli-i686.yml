@@ -124,7 +124,7 @@ jobs:
             trap 'rm -rf "$tmpdir"' EXIT
             curl --fail --location --retry 5 \
               -o "$tmpdir/deno_core_icudata.crate" \
-              'https://crates.io/api/v1/crates/deno_core_icudata/0.77.0/download'
+              'https://static.crates.io/crates/deno_core_icudata/deno_core_icudata-0.77.0.crate'
             mkdir -p "$tmpdir/pkg"
             tar -xzf "$tmpdir/deno_core_icudata.crate" -C "$tmpdir/pkg"
             icu_source="$(find "$tmpdir/pkg" -type f -path '*/src/icudtl.dat' -print -quit)"
