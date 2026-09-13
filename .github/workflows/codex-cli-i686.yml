@@ -65,6 +65,11 @@ jobs:
           version: ${{ env.ZIG_VERSION }}
 
       - name: Install cargo-zigbuild
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Install cargo-zigbuild
         shell: bash
         run: cargo install cargo-zigbuild --locked
 
@@ -136,12 +141,29 @@ jobs:
           ls -lh "$icu_dat"
 
       - name: Cross-compile Codex CLI
+        id: build_cli
+        continue-on-error: true
         working-directory: upstream/codex/codex-rs
         shell: bash
         run: |
-          set -euo pipefail
+          set -o pipefail
           cargo zigbuild --release --target "$CODEX_TARGET" --bin codex \
-            --config "patch.crates-io.blake3.path='$GITHUB_WORKSPACE/blake3-patched'"
+            --config "patch.crates-io.blake3.path='$GITHUB_WORKSPACE/blake3-patched'" \
+            2>&1 | tee "$GITHUB_WORKSPACE/codex-build.log"
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a0 # v7.0.1
+        with:
+          name: codex-i686-build-log
+          path: codex-build.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Fail if CLI build failed
+        if: steps.build_cli.outcome == 'failure'
+        shell: bash
+        run: exit 1
 
       - name: Inspect and package CLI
         shell: bash
