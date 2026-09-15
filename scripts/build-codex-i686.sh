@@ -21,6 +21,34 @@ install -m 0644 \
 # upstream-supported guard selects OpenSSL's existing RWLock fallback instead.
 export CFLAGS="${CFLAGS:+$CFLAGS }-DBROKEN_CLANG_ATOMICS"
 
+# rusty_v8 149.2.0 contains Chromium's vendored ICU4X sources, but its
+# published crate is missing the build script for icu_calendar_data-v2.
+# GN still generates a Ninja edge for that build script, so the source build
+# fails before compiling V8 with "missing and no known rule to make it".
+# Restore the exact 2.0.0 build script from the corresponding crates.io
+# package into the unpacked rusty_v8 source tree. This does not alter Cargo's
+# dependency graph or lockfile; it only repairs the incomplete vendored source
+# shipped inside the pinned v8 crate.
+v8_dir="$(find "$CARGO_HOME/registry/src" -maxdepth 2 -type d -name 'v8-149.2.0' -print -quit)"
+if [[ -z "$v8_dir" ]]; then
+  echo "error: could not locate the unpacked v8-149.2.0 crate" >&2
+  exit 1
+fi
+
+icu_calendar_data_dir="$v8_dir/third_party/rust/chromium_crates_io/vendor/icu_calendar_data-v2"
+if [[ ! -f "$icu_calendar_data_dir/build.rs" ]]; then
+  tmp_dir="$(mktemp -d)"
+  trap 'rm -rf "$tmp_dir"' EXIT
+
+  curl --fail --silent --show-error --location \
+    https://crates.io/api/v1/crates/icu_calendar_data/2.0.0/download \
+    | tar -xz -C "$tmp_dir"
+
+  install -m 0644 \
+    "$tmp_dir/icu_calendar_data-2.0.0/build.rs" \
+    "$icu_calendar_data_dir/build.rs"
+fi
+
 cargo zigbuild \
   --locked \
   --release \
