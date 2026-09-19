@@ -29,6 +29,16 @@ export CFLAGS="${CFLAGS:+$CFLAGS }-DBROKEN_CLANG_ATOMICS"
 # package into the unpacked rusty_v8 source tree. This does not alter Cargo's
 # dependency graph or lockfile; it only repairs the incomplete vendored source
 # shipped inside the pinned v8 crate.
+# rusty_v8 149.2.0 contains Chromium's vendored ICU4X sources, but its
+# published crate is missing the build script for icu_calendar_data-v2.
+# GN still generates a Ninja edge for that build script, so the source build
+# fails before compiling V8 with "missing and no known rule to make it".
+# Fetch the target dependencies first so Cargo unpacks rusty_v8 into CARGO_HOME.
+# Then restore the exact 2.0.0 build script from the corresponding crates.io
+# package. This does not alter Cargo's dependency graph or lockfile; it only
+# repairs the incomplete vendored source shipped inside the pinned v8 crate.
+cargo fetch --locked --target i686-unknown-linux-musl
+
 v8_dir="$(find "$CARGO_HOME/registry/src" -maxdepth 2 -type d -name 'v8-149.2.0' -print -quit)"
 if [[ -z "$v8_dir" ]]; then
   echo "error: could not locate the unpacked v8-149.2.0 crate" >&2
