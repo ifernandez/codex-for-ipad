@@ -25,14 +25,6 @@ export CFLAGS="${CFLAGS:+$CFLAGS }-DBROKEN_CLANG_ATOMICS"
 # published crate is missing the build script for icu_calendar_data-v2.
 # GN still generates a Ninja edge for that build script, so the source build
 # fails before compiling V8 with "missing and no known rule to make it".
-# Restore the exact 2.0.0 build script from the corresponding crates.io
-# package into the unpacked rusty_v8 source tree. This does not alter Cargo's
-# dependency graph or lockfile; it only repairs the incomplete vendored source
-# shipped inside the pinned v8 crate.
-# rusty_v8 149.2.0 contains Chromium's vendored ICU4X sources, but its
-# published crate is missing the build script for icu_calendar_data-v2.
-# GN still generates a Ninja edge for that build script, so the source build
-# fails before compiling V8 with "missing and no known rule to make it".
 # Fetch the target dependencies first so Cargo unpacks rusty_v8 into CARGO_HOME.
 # Then restore the exact 2.0.0 build script from the corresponding crates.io
 # package. This does not alter Cargo's dependency graph or lockfile; it only
@@ -66,3 +58,12 @@ cargo zigbuild \
   --target i686-unknown-linux-musl \
   -p codex-app-server \
   --bin codex-app-server
+
+# The actual terminal Codex CLI is the Rust codex binary, not the app-server.
+# Build it for the same iSH target from the same patched workspace.
+cargo zigbuild \
+  --locked \
+  --release \
+  --target i686-unknown-linux-musl \
+  -p codex-cli \
+  --bin codex
