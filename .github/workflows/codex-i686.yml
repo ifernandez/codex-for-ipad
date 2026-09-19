@@ -49,7 +49,7 @@ permissions:
 
 jobs:
   app-server:
-    name: Build Codex app-server for iSH
+    name: Build Codex app-server and CLI for iSH
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     outputs:
@@ -121,12 +121,12 @@ jobs:
         shell: bash
         run: cargo install cargo-zigbuild --locked
 
-      - name: Cross-compile app-server
+      - name: Cross-compile app-server and CLI
         working-directory: upstream/codex/codex-rs
         shell: bash
         run: $GITHUB_WORKSPACE/scripts/build-codex-i686.sh
 
-      - name: Inspect binary and protocol
+      - name: Inspect app-server binary and protocol
         shell: bash
         run: |
           set -euo pipefail
@@ -153,10 +153,44 @@ jobs:
             "$bundle/"
 
       - name: Upload verified app-server
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a0 # v7.0.1
         with:
           name: codex-app-server-i686-musl
           path: artifacts/app-server-bundle/
+          if-no-files-found: error
+          compression-level: 9
+          retention-days: 14
+
+      - name: Inspect Codex CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          binary="$CARGO_TARGET_DIR/$CODEX_TARGET/release/codex"
+          test -x "$binary"
+          file "$binary" | tee artifacts/codex.file.txt
+          test "$(od -An -tu1 -j4 -N1 "$binary" | tr -d ' ')" = "1"
+          "$binary" --version | tee artifacts/codex.version.txt
+          sha256sum "$binary" | tee artifacts/codex.sha256
+
+      - name: Stage Codex CLI bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle=artifacts/codex-cli-i686-musl
+          mkdir -p "$bundle"
+          install -m 0755 \
+            "$CARGO_TARGET_DIR/$CODEX_TARGET/release/codex" \
+            "$bundle/codex"
+          cp artifacts/codex.sha256 \
+            artifacts/codex.file.txt \
+            artifacts/codex.version.txt \
+            "$bundle/"
+
+      - name: Upload Codex CLI for iSH
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: codex-cli-i686-musl
+          path: artifacts/codex-cli-i686-musl/
           if-no-files-found: error
           compression-level: 9
           retention-days: 14
