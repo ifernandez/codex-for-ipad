@@ -54,6 +54,7 @@ if [[ ! -f "$icu_calendar_data_dir/build.rs" ]]; then
     https://crates.io/api/v1/crates/icu_calendar_data/2.0.0/download \
     | tar -xz -C "$tmp_dir"
 
+  mkdir -p "$icu_calendar_data_dir"
   install -m 0644 \
     "$tmp_dir/icu_calendar_data-2.0.0/build.rs" \
     "$icu_calendar_data_dir/build.rs"
