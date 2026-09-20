@@ -21,6 +21,13 @@ install -m 0644 \
 # upstream-supported guard selects OpenSSL's existing RWLock fallback instead.
 export CFLAGS="${CFLAGS:+$CFLAGS }-DBROKEN_CLANG_ATOMICS"
 
+# Keep the release binary suitable for iSH: the default Codex release profile
+# currently carries DWARF debug information, which made the static i686 CLI
+# exceed 1 GB. Cargo's profile environment overrides remove debug info and
+# strip symbols without changing the dependency graph or lockfile.
+export CARGO_PROFILE_RELEASE_DEBUG=0
+export CARGO_PROFILE_RELEASE_STRIP=symbols
+
 # rusty_v8 149.2.0 contains Chromium's vendored ICU4X sources, but its
 # published crate is missing the build script for icu_calendar_data-v2.
 # GN still generates a Ninja edge for that build script, so the source build
